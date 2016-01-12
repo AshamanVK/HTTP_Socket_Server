@@ -33,6 +33,8 @@ def main():
         print 'response to connection: HI! how are you?\n'
         client_sock.send('HI! how are you?\n')
 
+        Processor.set_flow_free()
+
         client_sock.close()
 
 

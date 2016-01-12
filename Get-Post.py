@@ -3,5 +3,6 @@
 saved_data = {}
 
 
-def do_get():
-	
+def gen_headers(code):
+
+    

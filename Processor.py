@@ -3,6 +3,18 @@
 import socket
 
 request_data = []
+flow = 'free'
+
+
+def set_flow_buisy():
+    global flow
+    flow = 'buisy'
+
+
+def set_flow_free():
+    '''Frees the flow'''
+    global flow
+    flow = 'free'
 
 
 def request_data_clear():
@@ -22,24 +34,29 @@ def recv_all(sock):
     '''Read all data from request'''
 
     timeout = sock.gettimeout()
-    try:
-        sock.settimeout(0.1)
+    if flow == 'free':
+        try:
+            sock.settimeout(0.1)
 
-        data = []
-        while True:
-            try:
-                data.append(sock.recv(1024))
-            except socket.timeout:
-                return ''.join(data)
+            data = []
+            while True:
+                try:
+                    data.append(sock.recv(16384))
+                except socket.timeout:
+                    # stop recive data by set marker to 'buisy'
+                    set_flow_buisy()
+                    return ''.join(data)
 
-    finally:
-        sock.settimeout(timeout)
+        finally:
+            sock.settimeout(timeout)
 
 
 def get_request_data(socket):
 
     request = line_format(recv_all(socket))
     request_body = request.split('\n\n', 1)
+    if request_body == ['']:
+        return
 
     # IGNORE /favicon.ico
     temp = request_body[0].splitlines()
@@ -49,7 +66,7 @@ def get_request_data(socket):
         print 'SORRY BUT FAVICON WAS IGNORED'
         return
     else:
-        if len(request_data) != 1:
+        if len(request_data) >= 1:
             request_data_clear()
         request_data.append(request_body)
 
@@ -69,7 +86,7 @@ def parse_data():
     request_headline = request_head[0]
     request_headers = dict(x.split(': ', 1) for x in request_head[1:])
 
-    request_method, request_url, request_proto = request_headline.split(' ', 3)
+    request_headline = request_headline.split(' ', 3)
 
     print '##STEP_3-----request_healine---------------'
     print request_headline
