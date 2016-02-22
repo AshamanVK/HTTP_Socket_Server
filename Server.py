@@ -11,43 +11,81 @@ class HttpServer:
         """Constructor."""
         self.host = "localhost"
         self.port = port
+        self.data = ""
 
-    def server(self):
+    def serve(self):
         """Main loop."""
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((self.host, self.port))
+        self.socket.listen(1)
         print "start server on:", self.host, self.port
+
         while True:
-            self.socket.listen(1)
-            self.conn, self.addr = self.socket.accept()
-            print "got connection from:", self.addr
 
-            self.data = self.conn.recv(1024)
-            print self.data
+            c = HttpConnection(self.socket)
+            c.connection()
 
+            self.data = c.data
+
+            r = HttpRequest(self.data)
             r.http_request()
             r.get_headers()
 
-            self.conn.send(self.data)
-            self.conn.close()
+            c.conn.send("Hi!")
+            c.conn.close()
+
+
+class HttpConnection:
+    """New connection."""
+
+    def __init__(self, socket):
+        """Constructor."""
+        self.socket = socket
+        self.conn, self.addr = self.socket.accept()
+        self.data = ""
+
+    def connection(self):
+        """Making new connection."""
+        print "got connection from:", self.addr
+        self.conn.settimeout(0.5)
+        try:
+            while True:
+                temp = self.conn.recv(1024)
+                self.data += temp
+                if not temp:
+                    break
+        except:
+            pass
+        print self.data
 
 
 class HttpRequest:
     """Parser."""
 
+    def __init__(self, data):
+        """Constructor."""
+        self.data = data
+        self.head = data.split("\n\n")[0]
+        self.headers = {}
+        try:
+            self.body = data.split("\n\n")[1]
+        except:
+            pass
+
     def http_request(self):
         """Parse header."""
-        self.method = s.data.split(" ")[0]
-        print self.method
+        self.method = self.head.split(" ")[0]
 
     def get_headers(self):
         """Headers."""
-        temp = s.data.split("\r\n")
-        self.headers = temp
-        print self.headers
+        for i in self.head.splitlines():
+            try:
+                temp = i.split(": ")
+                self.headers[temp[0]] = temp[1]
+            except:
+                pass
 
 
 s = HttpServer()
-r = HttpRequest()
-s.server()
+s.serve()
