@@ -26,13 +26,17 @@ class HttpServer:
             c = HttpConnection(self.socket)
             c.connection()
 
-            self.data = c.data
+            parse = HttpRequestParser(c.data)
+            parse.get_method()
+            parse.get_headers()
+            parse.get_body()
 
-            r = HttpRequest(self.data)
-            r.http_request()
-            r.get_headers()
+            request = HttpRequest(parse.method,
+                                  parse.headers,
+                                  parse.body)
+            request.test()
 
-            c.conn.send("Hi!")
+            c.conn.send(c.data)
             c.conn.close()
 
 
@@ -55,37 +59,61 @@ class HttpConnection:
                 self.data += temp
                 if not temp:
                     break
-        except:
+        except socket.timeout:
             pass
         print self.data
+        print self.data.split("\n\n")
 
 
 class HttpRequest:
     """Parser."""
 
+    def __init__(self, method, headers, body):
+        """Constructor."""
+        self.method = method
+        self.headers = headers
+        self.body = body
+
+    def test(self):
+        """Test."""
+        print "-----------"
+        print self.method
+        print "-----------"
+        print self.headers
+        print "-----------"
+        print self.body
+        print "-----------\n\n\n"
+
+
+class HttpRequestParser:
+    """Request parser."""
+
     def __init__(self, data):
         """Constructor."""
         self.data = data
-        self.head = data.split("\n\n")[0]
+        self.head = data.split("\r\n\r\n")[0]
         self.headers = {}
-        try:
-            self.body = data.split("\n\n")[1]
-        except:
-            pass
+        self.body = []
 
-    def http_request(self):
-        """Parse header."""
+    def get_method(self):
+        """Method string."""
         self.method = self.head.split(" ")[0]
 
     def get_headers(self):
-        """Headers."""
+        """Header dictionary."""
         for i in self.head.splitlines():
             try:
                 temp = i.split(": ")
                 self.headers[temp[0]] = temp[1]
-            except:
+            except IndexError:
                 pass
 
+    def get_body(self):
+        """Body list."""
+        try:
+            self.body = self.data.split("\r\n\r\n")[1]
+        except IndexError:
+            pass
 
 s = HttpServer()
 s.serve()
