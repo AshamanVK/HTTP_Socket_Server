@@ -3,6 +3,9 @@ u"""HTTP Сервер."""
 
 import socket
 import time
+import logging
+
+frmt = '[%(levelname)s] %(message)s'
 
 
 class HttpServer:
@@ -16,6 +19,10 @@ class HttpServer:
 
     def serve(self):
         u"""Запуск сервера."""
+        logging.basicConfig(format=frmt,
+                            filename="logfile.log",
+                            level=logging.DEBUG)
+
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((self.host, self.port))
@@ -26,24 +33,25 @@ class HttpServer:
 
             self.conn, self.addr = self.socket.accept()
 
+            logging.info('-----------start session-----------')
+
             # создаем объект - подключение
             c = HttpConnection(self.conn, self.addr)
-            # считываем данные подключения
-            data = c.connection()
 
-            # создаем объект обрабатывающий данные
-            parse = HttpRequestParser(data)
-            # передаем разделенные данные дальше в реквест
-            parse.get_request()
+            c.connection()
 
-            parse.request.test()  # принт полученных данных
-            answer = parse.request.do_something()
+            c.parse.get_request()
 
-            snd = HttpResponse(c.conn, self.addr, answer)
+            c.parse.request.make_log()  # сбор в logfile основных данных
+            answer = c.parse.request.do_something()
+
+            snd = HttpResponse(self.addr, answer)
 
             response = snd.send_to_client()
+            logging.debug("response = {}".format(response))
 
             c.conn.send("\n" + response)
+            logging.info('-----------end of session-----------\n')
             c.conn.close()
 
 
@@ -55,6 +63,7 @@ class HttpConnection:
         self.conn = conn
         self.addr = addr
         self.data = ""
+        self.parse = ""
 
     def connection(self):
         u"""Считывание данных полученных от клиента."""
@@ -70,7 +79,9 @@ class HttpConnection:
         except socket.timeout:
             pass
         print self.data
-        return self.data
+
+        # передаем дату в парсер
+        self.parse = HttpRequestParser(self.data)
 
 
 class HttpRequestParser:
@@ -122,11 +133,20 @@ class HttpRequest:
     u"""Обработка полученых данных."""
 
     def __init__(self, method, headers, body):
-        u"""Получаем (list, dict, str)."""
+        u"""Данные для проверки валидности.
+
+        method : list
+            список элементов первой строки заголовка
+        headers : dict
+            словарь вида header: value
+        body : str
+            полученные от пользователя данные
+        """
         self.method = method
         self.headers = headers
         self.body = body
         self.answer = "good"
+        self.lst = ("POST", "GET")
 
     def do_something(self):
         """noflake8."""
@@ -134,7 +154,7 @@ class HttpRequest:
 
         request_method = self.method[0]
 
-        if request_method not in ["POST", "GET"]:
+        if request_method not in self.lst:
             self.answer = "400"
             return (self.answer, head_list)
 
@@ -145,32 +165,25 @@ class HttpRequest:
         temp = [k + ": " + v for (k, v) in self.headers.items()]
         return temp
 
-    def test(self):  # смотрю что и как лежит
-        """Test."""
-        print "-----------"
-        print self.method
-        print "-----------"
-        print self.headers
-        print "-----------"
-        print self.body
-        print "-----------"
+    def make_log(self):
+        u"""Запись значений в logfile."""
+        logging.debug("method = {}".format(self.method))
+        logging.debug("headers = {}".format(self.headers))
+        logging.debug("body = {}".format(self.body))
 
 
 class HttpResponse:
     u"""Ответ клиенту."""
 
-    def __init__(self, conn, addr, answer):
+    def __init__(self, answer):
         """noflake8."""
-        self.conn = conn
-        self.addr = addr
         self.answer = answer
         self.code = "200 OK"
 
     def send_to_client(self):
         """noflake8."""
-        print self.answer           # принт для себя
+        logging.debug("answer = {}".format(self.answer))
         send = self.__template()
-        print send
         print "-----------\n\n\n"
         return "\r\n".join(send)
 
@@ -180,18 +193,6 @@ class HttpResponse:
                     "Date: " + date]
         template += self.answer[1]
         return template
-
-    def __200_ok(self):
-        self.code = "200 OK"
-        pass
-
-    def __400_bad_request(self):
-        self.code = "400 Bad Request"
-        pass
-
-    def __404_not_found(self):
-        self.code = "404 Not Found"
-        pass
 
 s = HttpServer()
 s.serve()
